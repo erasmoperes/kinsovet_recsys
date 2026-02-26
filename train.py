@@ -173,9 +173,11 @@ def train_node2vec_gpu(
     p=1.0,
     q=1.0,
     num_neg=5,
-    batch_size=32768,
-    epochs=5,
+    batch_size=131072,
+    max_epochs=20,
     lr=0.005,
+    patience=3,
+    min_delta=1e-4,
     workers=4,
 ):
     with tempfile.NamedTemporaryFile(mode="w", suffix=".edgelist", delete=False) as f:
@@ -205,14 +207,16 @@ def train_node2vec_gpu(
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
     n_pairs = all_pairs.size(0)
-    for epoch in range(epochs):
+    best_loss = float("inf")
+    wait = 0
+    for epoch in range(max_epochs):
         perm = torch.randperm(n_pairs, device=device)
         all_pairs = all_pairs[perm]
 
         total_loss = 0
         num_batches = 0
         n_batches = (n_pairs + batch_size - 1) // batch_size
-        pbar = tqdm(range(n_batches), desc=f"Epoch {epoch+1}/{epochs}")
+        pbar = tqdm(range(n_batches), desc=f"Epoch {epoch+1}/{max_epochs}")
         for b in pbar:
             start = b * batch_size
             end = min(start + batch_size, n_pairs)
@@ -230,7 +234,17 @@ def train_node2vec_gpu(
             num_batches += 1
             pbar.set_postfix(loss=f"{total_loss/num_batches:.4f}")
 
-        print(f"Epoch {epoch+1}: avg loss = {total_loss/num_batches:.4f}")
+        avg_loss = total_loss / num_batches
+        print(f"Epoch {epoch+1}: avg loss = {avg_loss:.4f}")
+
+        if best_loss - avg_loss > min_delta:
+            best_loss = avg_loss
+            wait = 0
+        else:
+            wait += 1
+            if wait >= patience:
+                print(f"Early stopping at epoch {epoch+1} (no improvement for {patience} epochs)")
+                break
 
     embeddings = model.target_embeddings.weight.detach().cpu().numpy()
     return all_nodes, node_to_idx, embeddings
@@ -347,7 +361,6 @@ def objective(trial, train_graph, test_edges_dict, graph):
         "q": trial.suggest_float("q", **ss["q"]),
         "lr": trial.suggest_float("lr", **ss["lr"]),
         "num_neg": trial.suggest_int("num_neg", **ss["num_neg"]),
-        "epochs": trial.suggest_int("epochs", **ss["epochs"]),
     }
 
     print(f"\n=== Trial {trial.number} ===")
@@ -364,7 +377,6 @@ def objective(trial, train_graph, test_edges_dict, graph):
         p=params["p"],
         q=params["q"],
         num_neg=params["num_neg"],
-        epochs=params["epochs"],
         lr=params["lr"],
     )
 
@@ -424,11 +436,11 @@ def run_optimization(train_graph, test_edges_dict, graph, n_trials=100, study_na
 # ─── Main ───────────────────────────────────────────────────────────────────────
 
 
+STUDY_NAME = "node2vec_v2"
 GRAPH_PATH = "graph.json"
 SEED = 42
 OPTIMIZE = True
 N_TRIALS = 100
-STUDY_NAME = "node2vec"
 
 # Пространство поиска Optuna
 SEARCH_SPACE = {
@@ -440,7 +452,6 @@ SEARCH_SPACE = {
     "q": {"low": 0.25, "high": 4.0, "log": True},
     "lr": {"low": 1e-3, "high": 1e-2, "log": True},
     "num_neg": {"low": 3, "high": 10},
-    "epochs": {"low": 3, "high": 10},
 }
 
 # Параметры для одиночного прогона (без Optuna)
@@ -450,9 +461,11 @@ WINDOW = 5
 NUM_WALKS = 10
 P = 1.0
 Q = 1.0
-EPOCHS = 5
+MAX_EPOCHS = 20
 LR = 0.005
-BATCH_SIZE = 32768
+PATIENCE = 3
+MIN_DELTA = 1e-4
+BATCH_SIZE = 131072
 
 
 def main():
@@ -476,8 +489,10 @@ def main():
             num_walks=NUM_WALKS,
             p=P,
             q=Q,
-            epochs=EPOCHS,
+            max_epochs=MAX_EPOCHS,
             lr=LR,
+            patience=PATIENCE,
+            min_delta=MIN_DELTA,
             batch_size=BATCH_SIZE,
         )
         print(f"Embeddings shape: {embeddings.shape}")
