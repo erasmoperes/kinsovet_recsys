@@ -11,6 +11,7 @@ Node2Vec на GPU + Optuna для подбора гиперпараметров.
 import json
 import os
 import random
+import subprocess
 import tempfile
 from collections import defaultdict
 
@@ -372,6 +373,24 @@ def objective(trial, train_graph, test_edges_dict, graph):
     return float(mrr)
 
 
+def _git_push(files, message):
+    try:
+        subprocess.run(["git", "add"] + files, check=True)
+        subprocess.run(["git", "commit", "-m", message], check=True)
+        subprocess.run(["git", "push"], check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"[git push failed: {e}]")
+
+
+def _save_callback(study, trial, study_name):
+    csv_path = f"{study_name}_results.csv"
+    db_path = f"{study_name}.db"
+    study.trials_dataframe().to_csv(csv_path, index=False)
+    best = study.best_trial
+    print(f"[Trial {trial.number}] MRR={trial.value:.4f} | Best: #{best.number} MRR={best.value:.4f} | Saved {csv_path}")
+    _git_push([csv_path, db_path], f"trial {trial.number}: MRR={trial.value:.4f}")
+
+
 def run_optimization(train_graph, test_edges_dict, graph, n_trials=100, study_name="node2vec"):
     storage = f"sqlite:///{study_name}.db"
     study = optuna.create_study(
@@ -384,6 +403,7 @@ def run_optimization(train_graph, test_edges_dict, graph, n_trials=100, study_na
     study.optimize(
         lambda trial: objective(trial, train_graph, test_edges_dict, graph),
         n_trials=n_trials,
+        callbacks=[lambda study, trial: _save_callback(study, trial, study_name)],
     )
 
     print("\n=== BEST TRIAL ===")
@@ -392,11 +412,6 @@ def run_optimization(train_graph, test_edges_dict, graph, n_trials=100, study_na
     print(f"Params: {best.params}")
     for k, v in best.user_attrs.items():
         print(f"  {k}: {v:.4f}")
-
-    # Сохраняем все результаты в CSV
-    df = study.trials_dataframe()
-    df.to_csv(f"{study_name}_results.csv", index=False)
-    print(f"\nВсе результаты сохранены в {study_name}_results.csv")
 
     return study
 

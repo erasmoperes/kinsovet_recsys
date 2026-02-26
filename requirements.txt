@@ -1,5 +1,2 @@
-torch
 pecanpy
 optuna
-numpy
-tqdm
