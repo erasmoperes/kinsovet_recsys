@@ -263,10 +263,11 @@ def train_node2vec_gpu(
 # ─── Evaluation ─────────────────────────────────────────────────────────────────
 
 
-def evaluate_gpu(node_to_idx, embeddings, test_edges_dict, graph, ks=(5, 10, 20)):
+def evaluate_gpu(node_to_idx, embeddings, test_edges_dict, graph, train_graph, ks=(5, 10, 20)):
     """
     test_edges_dict: {node: hidden_neighbor} — ровно 1 скрытое ребро на ноду.
     Hit@K = нашли ли скрытого соседа в топ-K (0 или 1).
+    train_graph используется для маскирования известных соседей при ранжировании.
     """
     original_degree = {node: len(neighbors) for node, neighbors in graph.items()}
 
@@ -304,7 +305,17 @@ def evaluate_gpu(node_to_idx, embeddings, test_edges_dict, graph, ks=(5, 10, 20)
 
         batch_emb = emb_norm[batch_idx]
         sims = batch_emb @ emb_norm.T
+
+        # Маскируем себя
         sims[torch.arange(len(batch_idx), device=device), batch_idx] = -2.0
+
+        # Маскируем известных соседей из train_graph
+        for i, node in enumerate(batch_nodes):
+            train_neighbors = train_graph.get(node, set())
+            if train_neighbors:
+                mask_indices = [node_to_idx[nb] for nb in train_neighbors if nb in node_to_idx]
+                if mask_indices:
+                    sims[i, torch.tensor(mask_indices, device=device, dtype=torch.long)] = -2.0
 
         topk_vals, topk_indices = torch.topk(sims, max_k, dim=1)
         topk_indices = topk_indices.cpu().numpy()
@@ -390,7 +401,7 @@ def objective(trial, train_graph, test_edges_dict, graph):
         lr=params["lr"],
     )
 
-    results = evaluate_gpu(node_to_idx, embeddings, test_edges_dict, graph)
+    results = evaluate_gpu(node_to_idx, embeddings, test_edges_dict, graph, train_graph)
     mrr = np.mean(results["all"]["mrr"])
 
     # Логируем доп. метрики
@@ -504,7 +515,7 @@ def main():
             batch_size=BATCH_SIZE,
         )
         print(f"Embeddings shape: {embeddings.shape}")
-        evaluate_gpu(node_to_idx, embeddings, test_edges_dict, graph)
+        evaluate_gpu(node_to_idx, embeddings, test_edges_dict, graph, train_graph)
 
 
 if __name__ == "__main__":
