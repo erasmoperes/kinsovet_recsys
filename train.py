@@ -400,7 +400,7 @@ def _git_push(files, message):
 
 
 def _save_callback(study, trial, study_name):
-    csv_path = f"{study_name}_results.csv"
+    csv_path = f"{study_name}.csv"
     db_path = f"{study_name}.db"
     study.trials_dataframe().to_csv(csv_path, index=False)
     best = study.best_trial
