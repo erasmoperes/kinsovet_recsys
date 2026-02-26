@@ -1,0 +1,2 @@
+number,value,datetime_start,datetime_complete,duration,params_dimensions,params_lr,params_num_neg,params_num_walks,params_p,params_q,params_walk_length,params_window,user_attrs_hit@10,user_attrs_hit@20,user_attrs_hit@5,state
+0,0.2095152600731335,2026-02-26 13:27:13.552567,2026-02-26 13:28:34.665869,0 days 00:01:21.113302,256,0.0026164675025558562,12,15,1.0565755913500703,0.521280091089104,35,5,0.4099933504322219,0.48171368861024033,0.31708938918970264,COMPLETE
