@@ -456,7 +456,7 @@ N_TRIALS = 100
 SEARCH_SPACE = {
     "dimensions": [64, 128, 256],
     "walk_length": {"low": 10, "high": 40, "step": 5},
-    "window": {"low": 3, "high": 15},
+    "window": {"low": 2, "high": 5},
     "num_walks": {"low": 5, "high": 20, "step": 5},
     "p": {"low": 0.25, "high": 4.0, "log": True},
     "q": {"low": 0.25, "high": 4.0, "log": True},
