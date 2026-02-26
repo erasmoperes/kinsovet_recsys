@@ -264,20 +264,28 @@ def train_node2vec_gpu(
 
         total_loss = 0
         num_batches = 0
-        n_batches = (n_pairs + batch_size - 1) // batch_size
+        cur_batch_size = batch_size
+        n_batches = (n_pairs + cur_batch_size - 1) // cur_batch_size
         pbar = tqdm(range(n_batches), desc=f"Epoch {epoch}")
         for b in pbar:
-            start = b * batch_size
-            end = min(start + batch_size, n_pairs)
+            start = b * cur_batch_size
+            end = min(start + cur_batch_size, n_pairs)
             batch = all_pairs[start:end]
             target = batch[:, 0]
             context = batch[:, 1]
             neg = torch.randint(0, vocab_size, (end - start, num_neg), device=device)
 
-            loss = model(target, context, neg)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            try:
+                loss = model(target, context, neg)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+            except torch.cuda.OutOfMemoryError:
+                torch.cuda.empty_cache()
+                cur_batch_size = cur_batch_size // 2
+                print(f"\n[OOM] Reducing batch_size to {cur_batch_size}")
+                n_batches = (n_pairs + cur_batch_size - 1) // cur_batch_size
+                continue
 
             total_loss += loss.item()
             num_batches += 1
