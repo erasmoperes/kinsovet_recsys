@@ -523,22 +523,22 @@ def run_optimization(train_graph, test_edges_dict, graph, n_trials=100, study_na
 # ─── Main ───────────────────────────────────────────────────────────────────────
 
 
-STUDY_NAME = "node2vec_v5"
+STUDY_NAME = "node2vec_v6"
 GRAPH_PATH = "graph.json"
 SEED = 42
 OPTIMIZE = True
 N_TRIALS = 100
 
-# Пространство поиска Optuna
+# Пространство поиска Optuna (сужено по результатам v5)
 SEARCH_SPACE = {
-    "dimensions": [64, 128, 256],
-    "walk_length": {"low": 10, "high": 40, "step": 5},
-    "window": {"low": 2, "high": 5},
-    "num_walks": {"low": 5, "high": 20, "step": 5},
-    "p": {"low": 0.25, "high": 4.0, "log": True},
-    "q": {"low": 0.25, "high": 4.0, "log": True},
-    "lr": {"low": 1e-3, "high": 1e-2, "log": True},
-    "num_neg": {"low": 3, "high": 10},
+    "dimensions": [256, 384, 512],
+    "walk_length": {"low": 30, "high": 60, "step": 5},
+    "window": {"low": 3, "high": 7},
+    "num_walks": {"low": 5, "high": 15, "step": 5},
+    "p": {"low": 0.5, "high": 1.5},
+    "q": {"low": 0.2, "high": 0.6},
+    "lr": {"low": 2e-3, "high": 6e-3, "log": True},
+    "num_neg": {"low": 8, "high": 12},
 }
 
 # Параметры для одиночного прогона (без Optuna)
