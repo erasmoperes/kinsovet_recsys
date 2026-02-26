@@ -173,8 +173,7 @@ def train_node2vec_gpu(
     p=1.0,
     q=1.0,
     num_neg=5,
-    batch_size=131072,
-    max_epochs=20,
+    batch_size=524288,
     lr=0.005,
     patience=3,
     min_delta=1e-4,
@@ -208,15 +207,18 @@ def train_node2vec_gpu(
 
     n_pairs = all_pairs.size(0)
     best_loss = float("inf")
+    best_weights = model.target_embeddings.weight.detach().clone()
     wait = 0
-    for epoch in range(max_epochs):
+    epoch = 0
+    while True:
+        epoch += 1
         perm = torch.randperm(n_pairs, device=device)
         all_pairs = all_pairs[perm]
 
         total_loss = 0
         num_batches = 0
         n_batches = (n_pairs + batch_size - 1) // batch_size
-        pbar = tqdm(range(n_batches), desc=f"Epoch {epoch+1}/{max_epochs}")
+        pbar = tqdm(range(n_batches), desc=f"Epoch {epoch}")
         for b in pbar:
             start = b * batch_size
             end = min(start + batch_size, n_pairs)
@@ -235,18 +237,19 @@ def train_node2vec_gpu(
             pbar.set_postfix(loss=f"{total_loss/num_batches:.4f}")
 
         avg_loss = total_loss / num_batches
-        print(f"Epoch {epoch+1}: avg loss = {avg_loss:.4f}")
+        print(f"Epoch {epoch}: avg loss = {avg_loss:.4f}")
 
         if best_loss - avg_loss > min_delta:
             best_loss = avg_loss
+            best_weights = model.target_embeddings.weight.detach().clone()
             wait = 0
         else:
             wait += 1
             if wait >= patience:
-                print(f"Early stopping at epoch {epoch+1} (no improvement for {patience} epochs)")
+                print(f"Early stopping at epoch {epoch} (no improvement for {patience} epochs, best loss = {best_loss:.4f})")
                 break
 
-    embeddings = model.target_embeddings.weight.detach().cpu().numpy()
+    embeddings = best_weights.cpu().numpy()
     return all_nodes, node_to_idx, embeddings
 
 
@@ -436,7 +439,7 @@ def run_optimization(train_graph, test_edges_dict, graph, n_trials=100, study_na
 # ─── Main ───────────────────────────────────────────────────────────────────────
 
 
-STUDY_NAME = "node2vec_v2"
+STUDY_NAME = "node2vec_v3"
 GRAPH_PATH = "graph.json"
 SEED = 42
 OPTIMIZE = True
@@ -461,11 +464,10 @@ WINDOW = 5
 NUM_WALKS = 10
 P = 1.0
 Q = 1.0
-MAX_EPOCHS = 20
 LR = 0.005
 PATIENCE = 3
 MIN_DELTA = 1e-4
-BATCH_SIZE = 131072
+BATCH_SIZE = 524288
 
 
 def main():
@@ -489,7 +491,6 @@ def main():
             num_walks=NUM_WALKS,
             p=P,
             q=Q,
-            max_epochs=MAX_EPOCHS,
             lr=LR,
             patience=PATIENCE,
             min_delta=MIN_DELTA,
