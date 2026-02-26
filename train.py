@@ -171,6 +171,43 @@ def graph_to_edgelist(g, path):
                     written.add(edge)
 
 
+def _quick_mrr(node_to_idx, embeddings, test_edges_dict, train_graph):
+    """Быстрый MRR на подвыборке для early stopping."""
+    eval_nodes = [n for n in test_edges_dict if n in node_to_idx and test_edges_dict[n] in node_to_idx]
+    if not eval_nodes:
+        return 0.0
+
+    # Берём подвыборку для скорости
+    max_eval = min(2000, len(eval_nodes))
+    rng = np.random.default_rng(0)
+    sample_nodes = list(rng.choice(eval_nodes, max_eval, replace=False))
+
+    emb_tensor = torch.tensor(embeddings, device=device, dtype=torch.float32)
+    emb_norm = F.normalize(emb_tensor, dim=1)
+
+    sample_indices = torch.tensor([node_to_idx[n] for n in sample_nodes], device=device)
+    true_indices = torch.tensor([node_to_idx[test_edges_dict[n]] for n in sample_nodes], device=device)
+
+    batch_emb = emb_norm[sample_indices]
+    sims = batch_emb @ emb_norm.T
+
+    # Маскируем себя
+    sims[torch.arange(len(sample_indices), device=device), sample_indices] = -2.0
+
+    # Маскируем train-соседей
+    for i, node in enumerate(sample_nodes):
+        train_neighbors = train_graph.get(node, set())
+        if train_neighbors:
+            mask_idx = [node_to_idx[nb] for nb in train_neighbors if nb in node_to_idx]
+            if mask_idx:
+                sims[i, torch.tensor(mask_idx, device=device, dtype=torch.long)] = -2.0
+
+    # MRR
+    ranks = (sims >= sims[torch.arange(len(sample_indices), device=device), true_indices].unsqueeze(1)).sum(dim=1).float()
+    mrr = (1.0 / ranks).mean().item()
+    return mrr
+
+
 def train_node2vec_gpu(
     g,
     dimensions=128,
@@ -185,6 +222,8 @@ def train_node2vec_gpu(
     patience=3,
     min_delta=1e-4,
     workers=4,
+    test_edges_dict=None,
+    train_graph=None,
 ):
     with tempfile.NamedTemporaryFile(mode="w", suffix=".edgelist", delete=False) as f:
         edgelist_path = f.name
@@ -212,8 +251,9 @@ def train_node2vec_gpu(
     model = SkipGramModel(vocab_size, dimensions).to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
+    use_mrr = test_edges_dict is not None and train_graph is not None
     n_pairs = all_pairs.size(0)
-    best_loss = float("inf")
+    best_metric = -float("inf") if use_mrr else float("inf")
     best_weights = model.target_embeddings.weight.detach().clone()
     wait = 0
     epoch = 0
@@ -244,17 +284,33 @@ def train_node2vec_gpu(
             pbar.set_postfix(loss=f"{total_loss/num_batches:.4f}")
 
         avg_loss = total_loss / num_batches
-        print(f"Epoch {epoch}: avg loss = {avg_loss:.4f}")
 
-        if best_loss - avg_loss > min_delta:
-            best_loss = avg_loss
-            best_weights = model.target_embeddings.weight.detach().clone()
-            wait = 0
+        if use_mrr:
+            embeddings = model.target_embeddings.weight.detach().cpu().numpy()
+            mrr = _quick_mrr(node_to_idx, embeddings, test_edges_dict, train_graph)
+            print(f"Epoch {epoch}: loss = {avg_loss:.4f}, MRR = {mrr:.4f}")
+            improved = mrr - best_metric > min_delta
+            if improved:
+                best_metric = mrr
+                best_weights = model.target_embeddings.weight.detach().clone()
+                wait = 0
+            else:
+                wait += 1
+                if wait >= patience:
+                    print(f"Early stopping at epoch {epoch} (no MRR improvement for {patience} epochs, best MRR = {best_metric:.4f})")
+                    break
         else:
-            wait += 1
-            if wait >= patience:
-                print(f"Early stopping at epoch {epoch} (no improvement for {patience} epochs, best loss = {best_loss:.4f})")
-                break
+            print(f"Epoch {epoch}: avg loss = {avg_loss:.4f}")
+            improved = best_metric - avg_loss > min_delta
+            if improved:
+                best_metric = avg_loss
+                best_weights = model.target_embeddings.weight.detach().clone()
+                wait = 0
+            else:
+                wait += 1
+                if wait >= patience:
+                    print(f"Early stopping at epoch {epoch} (no improvement for {patience} epochs, best loss = {best_metric:.4f})")
+                    break
 
     embeddings = best_weights.cpu().numpy()
     return all_nodes, node_to_idx, embeddings
@@ -399,6 +455,8 @@ def objective(trial, train_graph, test_edges_dict, graph):
         q=params["q"],
         num_neg=params["num_neg"],
         lr=params["lr"],
+        test_edges_dict=test_edges_dict,
+        train_graph=train_graph,
     )
 
     results = evaluate_gpu(node_to_idx, embeddings, test_edges_dict, graph, train_graph)
@@ -513,6 +571,8 @@ def main():
             patience=PATIENCE,
             min_delta=MIN_DELTA,
             batch_size=BATCH_SIZE,
+            test_edges_dict=test_edges_dict,
+            train_graph=train_graph,
         )
         print(f"Embeddings shape: {embeddings.shape}")
         evaluate_gpu(node_to_idx, embeddings, test_edges_dict, graph, train_graph)
