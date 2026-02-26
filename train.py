@@ -247,7 +247,9 @@ def evaluate_gpu(node_to_idx, embeddings, test_edges_dict, graph, ks=(5, 10, 20)
     original_degree = {node: len(neighbors) for node, neighbors in graph.items()}
 
     buckets = {
-        "1-3": (1, 3),
+        "0-1": (0, 1),
+        "1-2": (1, 2),
+        "2-3": (2, 3),
         "3-6": (3, 6),
         "6-10": (6, 10),
         "10-15": (10, 15),
@@ -348,7 +350,10 @@ def objective(trial, train_graph, test_edges_dict, graph):
         "epochs": trial.suggest_int("epochs", **ss["epochs"]),
     }
 
-    print(f"\n=== Trial {trial.number} === {params}")
+    print(f"\n=== Trial {trial.number} ===")
+    for k, v in params.items():
+        print(f"  {k:<15} {v}")
+    print()
 
     all_nodes, node_to_idx, embeddings = train_node2vec_gpu(
         train_graph,
