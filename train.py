@@ -338,14 +338,14 @@ def objective(trial, train_graph, test_edges_dict, graph):
     ss = SEARCH_SPACE
     params = {
         "dimensions": trial.suggest_categorical("dimensions", ss["dimensions"]),
-        "walk_length": trial.suggest_int("walk_length", *ss["walk_length"]),
-        "window": trial.suggest_int("window", *ss["window"]),
-        "num_walks": trial.suggest_int("num_walks", *ss["num_walks"]),
-        "p": trial.suggest_float("p", *ss["p"]),
-        "q": trial.suggest_float("q", *ss["q"]),
-        "lr": trial.suggest_float("lr", *ss["lr"]),
-        "num_neg": trial.suggest_int("num_neg", *ss["num_neg"]),
-        "epochs": trial.suggest_int("epochs", *ss["epochs"]),
+        "walk_length": trial.suggest_int("walk_length", **ss["walk_length"]),
+        "window": trial.suggest_int("window", **ss["window"]),
+        "num_walks": trial.suggest_int("num_walks", **ss["num_walks"]),
+        "p": trial.suggest_float("p", **ss["p"]),
+        "q": trial.suggest_float("q", **ss["q"]),
+        "lr": trial.suggest_float("lr", **ss["lr"]),
+        "num_neg": trial.suggest_int("num_neg", **ss["num_neg"]),
+        "epochs": trial.suggest_int("epochs", **ss["epochs"]),
     }
 
     print(f"\n=== Trial {trial.number} === {params}")
@@ -425,17 +425,17 @@ OPTIMIZE = True
 N_TRIALS = 100
 STUDY_NAME = "node2vec"
 
-# Пространство поиска Optuna: (low, high, kwargs)
+# Пространство поиска Optuna
 SEARCH_SPACE = {
     "dimensions": [64, 128, 256],
-    "walk_length": (10, 40, {"step": 5}),
-    "window": (3, 15),
-    "num_walks": (5, 20, {"step": 5}),
-    "p": (0.25, 4.0, {"log": True}),
-    "q": (0.25, 4.0, {"log": True}),
-    "lr": (1e-3, 1e-2, {"log": True}),
-    "num_neg": (3, 10),
-    "epochs": (3, 10),
+    "walk_length": {"low": 10, "high": 40, "step": 5},
+    "window": {"low": 3, "high": 15},
+    "num_walks": {"low": 5, "high": 20, "step": 5},
+    "p": {"low": 0.25, "high": 4.0, "log": True},
+    "q": {"low": 0.25, "high": 4.0, "log": True},
+    "lr": {"low": 1e-3, "high": 1e-2, "log": True},
+    "num_neg": {"low": 3, "high": 10},
+    "epochs": {"low": 3, "high": 10},
 }
 
 # Параметры для одиночного прогона (без Optuna)
