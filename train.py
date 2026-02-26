@@ -523,7 +523,7 @@ def run_optimization(train_graph, test_edges_dict, graph, n_trials=100, study_na
 # ─── Main ───────────────────────────────────────────────────────────────────────
 
 
-STUDY_NAME = "node2vec_v6"
+STUDY_NAME = "node2vec_v7"
 GRAPH_PATH = "graph.json"
 SEED = 42
 OPTIMIZE = True
