@@ -352,7 +352,7 @@ def evaluate_gpu(node_to_idx, embeddings, test_edges_dict, graph, train_graph, k
     eval_indices = torch.tensor([node_to_idx[n] for n in eval_nodes], device=device)
     true_indices = torch.tensor([node_to_idx[test_edges_dict[n]] for n in eval_nodes], device=device)
 
-    batch_size = 2048
+    batch_size = 4096
     for start in tqdm(range(0, len(eval_nodes), batch_size), desc="Evaluating"):
         end = min(start + batch_size, len(eval_nodes))
         batch_nodes = eval_nodes[start:end]
@@ -515,7 +515,7 @@ def run_optimization(train_graph, test_edges_dict, graph, n_trials=100, study_na
 # ─── Main ───────────────────────────────────────────────────────────────────────
 
 
-STUDY_NAME = "node2vec_v4"
+STUDY_NAME = "node2vec_v5"
 GRAPH_PATH = "graph.json"
 SEED = 42
 OPTIMIZE = True
@@ -543,7 +543,7 @@ Q = 1.0
 LR = 0.005
 PATIENCE = 3
 MIN_DELTA = 1e-4
-BATCH_SIZE = 1048576
+BATCH_SIZE = 2097152
 
 
 def main():
