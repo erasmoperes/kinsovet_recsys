@@ -22,7 +22,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from pecanpy.pecanpy import SparseOTF
-from torch.utils.data import Dataset
 from tqdm import tqdm
 
 
@@ -109,23 +108,31 @@ def split_edges(graph):
 # ─── Model ──────────────────────────────────────────────────────────────────────
 
 
-class SkipGramDataset(Dataset):
-    def __init__(self, walks, node_to_idx, window):
-        self.pairs = []
-        for walk in walks:
-            indices = [node_to_idx[n] for n in walk if n in node_to_idx]
-            for i, target in enumerate(indices):
-                start = max(0, i - window)
-                end = min(len(indices), i + window + 1)
-                for j in range(start, end):
-                    if j != i:
-                        self.pairs.append((target, indices[j]))
+def build_skipgram_pairs(walks, node_to_idx, window):
+    """Vectorized skip-gram pair generation using numpy."""
+    walk_arrays = []
+    for walk in walks:
+        indices = [node_to_idx[n] for n in walk if n in node_to_idx]
+        if len(indices) > 1:
+            walk_arrays.append(np.array(indices, dtype=np.int64))
 
-    def __len__(self):
-        return len(self.pairs)
+    all_targets = []
+    all_contexts = []
+    for arr in walk_arrays:
+        n = len(arr)
+        for offset in range(1, window + 1):
+            # forward pairs
+            if offset < n:
+                all_targets.append(arr[:n - offset])
+                all_contexts.append(arr[offset:])
+            # backward pairs
+            if offset < n:
+                all_targets.append(arr[offset:])
+                all_contexts.append(arr[:n - offset])
 
-    def __getitem__(self, idx):
-        return self.pairs[idx]
+    targets = np.concatenate(all_targets)
+    contexts = np.concatenate(all_contexts)
+    return np.stack([targets, contexts], axis=1)
 
 
 class SkipGramModel(nn.Module):
@@ -197,10 +204,10 @@ def train_node2vec_gpu(
     vocab_size = len(all_nodes)
 
     print("Building dataset...")
-    dataset = SkipGramDataset(walks, node_to_idx, window)
-    print(f"Pairs: {len(dataset):,}")
-    all_pairs = torch.tensor(dataset.pairs, dtype=torch.long, device=device)
-    del dataset
+    pairs = build_skipgram_pairs(walks, node_to_idx, window)
+    print(f"Pairs: {len(pairs):,}")
+    all_pairs = torch.tensor(pairs, dtype=torch.long, device=device)
+    del pairs
 
     model = SkipGramModel(vocab_size, dimensions).to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr)
