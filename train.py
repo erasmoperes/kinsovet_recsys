@@ -487,8 +487,8 @@ def _git_push(files, message):
 
 
 def _save_callback(study, trial, study_name):
-    csv_path = f"{study_name}.csv"
-    db_path = f"{study_name}.db"
+    csv_path = f"runs/{study_name}.csv"
+    db_path = f"runs/{study_name}.db"
     study.trials_dataframe().to_csv(csv_path, index=False)
     best = study.best_trial
     print(f"[Trial {trial.number}] MRR={trial.value:.4f} | Best: #{best.number} MRR={best.value:.4f} | Saved {csv_path}")
@@ -496,7 +496,8 @@ def _save_callback(study, trial, study_name):
 
 
 def run_optimization(train_graph, test_edges_dict, graph, n_trials=100, study_name="node2vec"):
-    storage = f"sqlite:///{study_name}.db"
+    os.makedirs("runs", exist_ok=True)
+    storage = f"sqlite:///runs/{study_name}.db"
     study = optuna.create_study(
         study_name=study_name,
         storage=storage,
