@@ -11,6 +11,7 @@
 import json
 import os
 import random
+import subprocess
 import tempfile
 
 import numpy as np
@@ -197,6 +198,14 @@ def main():
     with open(OUTPUT_PATH, "w") as f:
         json.dump(recs, f, ensure_ascii=False)
     print(f"Saved {len(recs)} recommendations to {OUTPUT_PATH}")
+
+    try:
+        subprocess.run(["git", "add", OUTPUT_PATH], check=True)
+        subprocess.run(["git", "commit", "-m", f"recommendations v1: {len(recs)} movies, top-{TOP_N}"], check=True)
+        subprocess.run(["git", "push"], check=True)
+        print("Pushed to git")
+    except subprocess.CalledProcessError as e:
+        print(f"[git push failed: {e}]")
 
 
 if __name__ == "__main__":
