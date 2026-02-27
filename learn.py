@@ -45,7 +45,7 @@ BEST_PARAMS = {
 MAX_EPOCHS = 1
 TOP_N = 100
 BATCH_SIZE = 524288
-OUTPUT_PATH = "data/output/recommendations.json"
+OUTPUT_PATH = "data/output/recommendations_v1.json"
 GRAPH_PATH = "data/input/graph_v1.json"
 SEED = 42
 
