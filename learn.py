@@ -193,6 +193,7 @@ def main():
     print(f"\nGenerating top-{TOP_N} recommendations...")
     recs = generate_recommendations(all_nodes, embeddings, TOP_N)
 
+    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
     with open(OUTPUT_PATH, "w") as f:
         json.dump(recs, f, ensure_ascii=False)
     print(f"Saved {len(recs)} recommendations to {OUTPUT_PATH}")

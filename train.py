@@ -257,6 +257,7 @@ def train_node2vec_gpu(
     best_weights = model.target_embeddings.weight.detach().clone()
     wait = 0
     epoch = 0
+    avg_loss = float("nan")
     while True:
         epoch += 1
         perm = torch.randperm(n_pairs, device=device)
@@ -321,7 +322,13 @@ def train_node2vec_gpu(
                     break
 
     embeddings = best_weights.cpu().numpy()
-    return all_nodes, node_to_idx, embeddings
+    meta = {
+        "num_walks_total": len(walks),
+        "num_pairs": n_pairs,
+        "final_loss": avg_loss,
+        "epochs": epoch,
+    }
+    return all_nodes, node_to_idx, embeddings, meta
 
 
 # ─── Evaluation ─────────────────────────────────────────────────────────────────
@@ -453,7 +460,7 @@ def objective(trial, train_graph, test_edges_dict, graph):
         print(f"  {k:<15} {v}")
     print()
 
-    all_nodes, node_to_idx, embeddings = train_node2vec_gpu(
+    all_nodes, node_to_idx, embeddings, meta = train_node2vec_gpu(
         train_graph,
         dimensions=params["dimensions"],
         window=params["window"],
@@ -473,6 +480,20 @@ def objective(trial, train_graph, test_edges_dict, graph):
     # Логируем доп. метрики
     for k in [5, 10, 20]:
         trial.set_user_attr(f"hit@{k}", np.mean(results["all"][f"hit@{k}"]))
+
+    # Логируем данные о ране
+    num_nodes = len(graph)
+    num_edges = sum(len(nb) for nb in graph.values()) // 2
+    max_edges = num_nodes * (num_nodes - 1) // 2
+    density = num_edges / max_edges if max_edges > 0 else 0
+
+    trial.set_user_attr("num_nodes", num_nodes)
+    trial.set_user_attr("num_edges", num_edges)
+    trial.set_user_attr("density", round(density, 6))
+    trial.set_user_attr("num_walks_total", meta["num_walks_total"])
+    trial.set_user_attr("num_pairs", meta["num_pairs"])
+    trial.set_user_attr("final_loss", round(meta["final_loss"], 4))
+    trial.set_user_attr("epochs", meta["epochs"])
 
     return float(mrr)
 
@@ -568,7 +589,7 @@ def main():
     if OPTIMIZE:
         run_optimization(train_graph, test_edges_dict, graph, n_trials=N_TRIALS, study_name=STUDY_NAME)
     else:
-        all_nodes, node_to_idx, embeddings = train_node2vec_gpu(
+        all_nodes, node_to_idx, embeddings, meta = train_node2vec_gpu(
             train_graph,
             dimensions=DIMENSIONS,
             window=WINDOW,
